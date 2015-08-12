@@ -1,0 +1,36 @@
+// Tcl 8.6
+// Author: Andy Goth http://www.amazon.com/gp/pdp/profile/A10TYYYVOQ9W57/ref=cm_cr_dp_pdp
+// Notes: http://www.amazon.com/review/R1VKPEO3LSM6TW/ref=cm_cr_dp_title?ie=UTF8&ASIN=B00YYA014W&channel=detail-glance&nodeID=228013&store=hi
+
+The included documentation does a reasonably good job of describing the serial protocol at a logical level, 
+but it doesn't do much to describe the actual framing and signaling. 
+After a few hours of experimentation I was able to figure it out. 
+
+It's essentially asynchronous RS232 but with TTL voltage levels. 
+The data rate is 9600, the parity is MARK, and there are eight data bits and one stop bit. 
+At the moment I'm using a CP2102 to interface it to USB with a driver program written in Tcl 8.6 (code to follow).
+
+Everything works alright, but the unit beeps loudly every time I send a command to it. I will be disconnecting the buzzer for sure.
+
+set address \xc0\xa8\x01\x01
+proc command {command {value \x00}} {
+global chan address
+set message $command$address$value
+binary scan $message c* bytes
+set sum 0
+foreach byte $bytes {
+incr sum $byte
+}
+append message [binary format c $sum]
+chan puts -nonewline $chan $message
+chan flush $chan
+chan read $chan 7
+}
+catch {set chan [open com9: r+]} ;# change com9: to actual device name
+chan configure $chan -mode 9600,m,8,1 -buffering none -blocking 1 -translation binary
+binary scan [command \xb0] xSucu vw vf
+binary scan [command \xb1] xSucu cw cf
+binary scan [command \xb2] xSu pw
+binary scan [command \xb3] xSucu ew ef
+set ew [expr {$ew << 8 | $ef}]
+puts [format "%03d.%dV %02d.%02dA %04dW %05dWh" $vw $vf $cw $cf $pw $ew]
